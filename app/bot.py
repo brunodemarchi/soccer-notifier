@@ -18,7 +18,7 @@ from notifier import _send_to
 logger = logging.getLogger(__name__)
 
 _BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
-_COMMANDS = {"proximo", "proximos"}
+_COMMANDS = {"proximo", "proximos", "próximo", "próximos"}
 
 
 def _get_updates(offset: int) -> list:
