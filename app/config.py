@@ -14,17 +14,17 @@ TEAMS = [
     {
         "name":    "Barcelona",
         "search":  "Barcelona",
-        "leagues": ["esp.1", "UEFA.CHAMPIONS", "esp.copa.del.rey"],
+        "leagues": ["esp.1", "UEFA.CHAMPIONS"],
     },
     {
         "name":    "Real Madrid",
         "search":  "Real Madrid",
-        "leagues": ["esp.1", "UEFA.CHAMPIONS", "esp.copa.del.rey"],
+        "leagues": ["esp.1", "UEFA.CHAMPIONS"],
     },
     {
         "name":    "Brasil (Masc.)",
         "search":  "Brazil",
-        "leagues": ["fifa.worldq.conmebol", "conmebol.copa.america", "fifa.world"],
+        "leagues": ["fifa.worldq.conmebol", "fifa.world"],
     },
     {
         "name":    "Brasil (Fem.)",

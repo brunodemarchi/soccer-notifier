@@ -8,6 +8,17 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 _DAYS_AHEAD = 45
 
+_LEAGUE_NAMES = {
+    "esp.1":                    "La Liga",
+    "UEFA.CHAMPIONS":           "Champions League",
+    "fifa.worldq.conmebol":     "Eliminatórias Copa do Mundo",
+    "fifa.world":               "Copa do Mundo",
+    "conmebol.america.femenina":"Copa América Feminina",
+    "fifa.wwc":                 "Copa do Mundo Feminina",
+    "fifa.friendly.w":          "Amistoso Internacional",
+    "fifa.w.olympics":          "Olimpíadas",
+}
+
 
 def get_upcoming_fixtures(team_search: str, leagues: list) -> list:
     today = datetime.now(timezone.utc)
@@ -40,7 +51,7 @@ def parse_fixture(event: dict, league_slug: str) -> dict:
     competitors = comp.get("competitors", [])
     home = next((c["team"]["displayName"] for c in competitors if c["homeAway"] == "home"), "")
     away = next((c["team"]["displayName"] for c in competitors if c["homeAway"] == "away"), "")
-    league_name = event.get("league", {}).get("name", league_slug)
+    league_name = _LEAGUE_NAMES.get(league_slug, league_slug)
 
     return {
         "id":          str(event["id"]),
