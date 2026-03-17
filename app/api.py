@@ -15,6 +15,7 @@ _LEAGUE_NAMES = {
     "fifa.world":               "Copa do Mundo",
     "conmebol.america.femenina":"Copa América Feminina",
     "fifa.wwc":                 "Copa do Mundo Feminina",
+    "fifa.friendly":            "Amistoso Internacional",
     "fifa.friendly.w":          "Amistoso Internacional",
     "fifa.w.olympics":          "Olimpíadas",
 }

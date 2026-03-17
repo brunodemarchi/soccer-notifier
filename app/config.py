@@ -24,7 +24,7 @@ TEAMS = [
     {
         "name":    "Brasil (Masc.)",
         "search":  "Brazil",
-        "leagues": ["fifa.worldq.conmebol", "fifa.world"],
+        "leagues": ["fifa.worldq.conmebol", "fifa.world", "fifa.friendly"],
     },
     {
         "name":    "Brasil (Fem.)",
