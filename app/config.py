@@ -4,7 +4,7 @@ import pytz
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 # Comma-separated list of chat IDs, e.g. "111111111,222222222"
 TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.environ["TELEGRAM_CHAT_IDS"].split(",")]
-RAPIDAPI_KEY = os.environ["RAPIDAPI_KEY"]
+RAPIDAPI_KEY = os.environ["APISPORTS_KEY"]
 
 TIMEZONE = pytz.timezone("America/Sao_Paulo")
 

@@ -7,10 +7,9 @@ from config import RAPIDAPI_KEY
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://api-football-v1.p.rapidapi.com/v3"
+_BASE_URL = "https://v3.football.api-sports.io"
 _HEADERS = {
-    "X-RapidAPI-Key": RAPIDAPI_KEY,
-    "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com",
+    "x-apisports-key": RAPIDAPI_KEY,
 }
 
 
