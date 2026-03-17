@@ -4,17 +4,33 @@ import pytz
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 # Comma-separated list of chat IDs, e.g. "111111111,222222222"
 TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.environ["TELEGRAM_CHAT_IDS"].split(",")]
-RAPIDAPI_KEY = os.environ["APISPORTS_KEY"]
 
 TIMEZONE = pytz.timezone("America/Sao_Paulo")
 
-# Team IDs from API-Football (api-football-v1.p.rapidapi.com)
-# To verify or find other teams: GET /teams?name=TeamName
+# ESPN unofficial API — no key required.
+# search: string matched against ESPN event name to detect the team.
+# leagues: ESPN league slugs to scan for upcoming fixtures.
 TEAMS = [
-    {"id": 529,  "name": "Barcelona",      "gender": "male"},
-    {"id": 541,  "name": "Real Madrid",    "gender": "male"},
-    {"id": 6,    "name": "Brasil (Masc.)", "gender": "male"},
-    {"id": 1556, "name": "Brasil (Fem.)",  "gender": "female"},
+    {
+        "name":    "Barcelona",
+        "search":  "Barcelona",
+        "leagues": ["esp.1", "UEFA.CHAMPIONS", "esp.copa.del.rey"],
+    },
+    {
+        "name":    "Real Madrid",
+        "search":  "Real Madrid",
+        "leagues": ["esp.1", "UEFA.CHAMPIONS", "esp.copa.del.rey"],
+    },
+    {
+        "name":    "Brasil (Masc.)",
+        "search":  "Brazil",
+        "leagues": ["fifa.worldq.conmebol", "conmebol.copa.america", "fifa.world"],
+    },
+    {
+        "name":    "Brasil (Fem.)",
+        "search":  "Brazil",
+        "leagues": ["conmebol.america.femenina", "fifa.wwc", "fifa.friendly.w", "fifa.w.olympics"],
+    },
 ]
 
 DB_PATH = os.environ.get("DB_PATH", "/data/soccer.db")

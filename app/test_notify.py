@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 
 from config import TEAMS, TIMEZONE
-from api import get_upcoming_fixtures, parse_fixture
+from api import get_upcoming_fixtures
 from notifier import _send
 
 
@@ -23,12 +23,12 @@ def test():
     found_any = False
 
     for team in TEAMS:
-        fixtures = get_upcoming_fixtures(team["id"], next_n=1)
+        fixtures = get_upcoming_fixtures(team["search"], team["leagues"])
         if not fixtures:
-            print(f"[{team['name']}] ⚠️  Nenhum jogo encontrado (verifique a API key)")
+            print(f"[{team['name']}] ⚠️  Nenhum jogo encontrado")
             continue
 
-        match = parse_fixture(fixtures[0])
+        match = fixtures[0]
         kickoff_local = match["kickoff_utc"].astimezone(TIMEZONE)
 
         message = (

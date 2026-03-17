@@ -5,7 +5,7 @@ import pytz
 from apscheduler.events import EVENT_JOB_ERROR
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from api import get_upcoming_fixtures, parse_fixture
+from api import get_upcoming_fixtures
 from config import TEAMS, TIMEZONE
 from db import is_sent, mark_sent
 from notifier import send_day_before, send_morning, send_pre_match
@@ -83,14 +83,13 @@ def _schedule_match(match: dict):
 def fetch_and_schedule():
     logger.info("Buscando próximas partidas...")
     for team in TEAMS:
-        fixtures = get_upcoming_fixtures(team["id"], next_n=10)
+        fixtures = get_upcoming_fixtures(team["search"], team["leagues"])
         logger.info("Time %s → %d partidas encontradas", team["name"], len(fixtures))
-        for raw in fixtures:
+        for match in fixtures:
             try:
-                match = parse_fixture(raw)
                 _schedule_match(match)
             except Exception:
-                logger.exception("Erro ao processar partida: %s", raw)
+                logger.exception("Erro ao processar partida: %s", match)
     logger.info("Busca concluída")
 
 
