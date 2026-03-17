@@ -7,15 +7,19 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS, TIMEZONE
 logger = logging.getLogger(__name__)
 
 
-def _send(text: str):
+def _send_to(chat_id: str | int, text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    resp = requests.post(
+        url,
+        json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
+def _send(text: str):
     for chat_id in TELEGRAM_CHAT_IDS:
-        resp = requests.post(
-            url,
-            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-            timeout=10,
-        )
-        resp.raise_for_status()
+        _send_to(chat_id, text)
     logger.info("Notificação enviada (%d destinatários): %s", len(TELEGRAM_CHAT_IDS), text[:80])
 
 

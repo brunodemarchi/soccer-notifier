@@ -26,12 +26,14 @@ logger = logging.getLogger(__name__)
 
 from db import init_db          # noqa: E402
 from scheduler import start_scheduler  # noqa: E402
+from bot import start_bot      # noqa: E402
 
 
 def main():
     logger.info("⚽ Soccer Notifier iniciando...")
     init_db()
     start_scheduler()
+    start_bot()
     logger.info("Rodando. CTRL+C para parar.")
 
     try:
