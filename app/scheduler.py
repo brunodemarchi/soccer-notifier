@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler(timezone=TIMEZONE)
 
+# In-memory cache of match data used when scheduling, so we can detect
+# when ESPN updates a fixture (date, time, or teams) and reschedule.
+_known_matches: dict[str, dict] = {}
+
 # Grace times: how long after the scheduled time APScheduler will still fire the job
 # if the container was briefly down.
 _GRACE = {
@@ -35,6 +39,22 @@ def _execute_notification(func, match: dict, ntype: str):
     except Exception:
         logger.exception("Erro ao enviar notificação %s para partida %s", ntype, match["id"])
         raise  # re-raise so APScheduler registers the failure
+
+
+def _cancel_match_jobs(match_id: str):
+    """Remove all pending scheduler jobs for a match."""
+    for ntype in ("day_before", "morning", "pre_match"):
+        job_id = _job_id(match_id, ntype)
+        if scheduler.get_job(job_id):
+            scheduler.remove_job(job_id)
+            logger.info("Cancelado [%s]", job_id)
+    _known_matches.pop(match_id, None)
+
+
+def _match_data_changed(old: dict, new: dict) -> bool:
+    return (old["kickoff_utc"] != new["kickoff_utc"]
+            or old["home"] != new["home"]
+            or old["away"] != new["away"])
 
 
 def _schedule_one(run_at: datetime, match: dict, ntype: str, func):
@@ -63,6 +83,22 @@ def _schedule_one(run_at: datetime, match: dict, ntype: str, func):
 
 
 def _schedule_match(match: dict):
+    match_id = match["id"]
+
+    # If ESPN updated this fixture (new time, date, or teams), cancel stale
+    # jobs and reschedule with fresh data.
+    if match_id in _known_matches:
+        if not _match_data_changed(_known_matches[match_id], match):
+            return  # unchanged — nothing to do
+        old = _known_matches[match_id]
+        logger.warning(
+            "Partida %s alterada: %s %s×%s → %s %s×%s — reagendando",
+            match_id,
+            old["kickoff_utc"].isoformat(), old["home"], old["away"],
+            match["kickoff_utc"].isoformat(), match["home"], match["away"],
+        )
+        _cancel_match_jobs(match_id)
+
     kickoff_local = match["kickoff_utc"].astimezone(TIMEZONE)
     d = kickoff_local.date()
 
@@ -79,17 +115,34 @@ def _schedule_match(match: dict):
     _schedule_one(morning_at,    match, "morning",    send_morning)
     _schedule_one(pre_match_at,  match, "pre_match",  send_pre_match)
 
+    _known_matches[match_id] = match
+
 
 def fetch_and_schedule():
     logger.info("Buscando próximas partidas...")
+    all_fresh_ids: set[str] = set()
+
     for team in TEAMS:
         fixtures = get_upcoming_fixtures(team["search"], team["leagues"])
         logger.info("Time %s → %d partidas encontradas", team["name"], len(fixtures))
         for match in fixtures:
+            all_fresh_ids.add(match["id"])
             try:
                 _schedule_match(match)
             except Exception:
                 logger.exception("Erro ao processar partida: %s", match)
+
+    # Cancel jobs for matches ESPN no longer returns for any tracked team
+    # (e.g. event reassigned to a different matchup).
+    stale_ids = set(_known_matches.keys()) - all_fresh_ids
+    for match_id in stale_ids:
+        old = _known_matches[match_id]
+        logger.warning(
+            "Partida %s (%s×%s) não encontrada — cancelando notificações",
+            match_id, old["home"], old["away"],
+        )
+        _cancel_match_jobs(match_id)
+
     logger.info("Busca concluída")
 
 
