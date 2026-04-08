@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pytz
@@ -14,10 +15,6 @@ logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler(timezone=TIMEZONE)
 
-# In-memory cache of match data used when scheduling, so we can detect
-# when ESPN updates a fixture (date, time, or teams) and reschedule.
-_known_matches: dict[str, dict] = {}
-
 # Grace times: how long after the scheduled time APScheduler will still fire the job
 # if the container was briefly down.
 _GRACE = {
@@ -26,122 +23,87 @@ _GRACE = {
     "pre_match":  180,   # 3 min  — after that the game has already started
 }
 
+_NOTIFY_FUNCS = {
+    "day_before": send_day_before,
+    "morning":    send_morning,
+    "pre_match":  send_pre_match,
+}
 
-def _job_id(match_id: str, ntype: str) -> str:
-    return f"{match_id}__{ntype}"
 
-
-def _execute_notification(func, match: dict, ntype: str):
-    """Wrapper called by APScheduler. Sends message and marks as sent."""
+def _execute_batch(ntype: str, matches: list[dict]):
+    """Send a grouped notification and mark all matches as sent."""
     try:
-        func(match)
-        mark_sent(match["id"], ntype)
+        _NOTIFY_FUNCS[ntype](matches)
+        for match in matches:
+            mark_sent(match["id"], ntype)
     except Exception:
-        logger.exception("Erro ao enviar notificação %s para partida %s", ntype, match["id"])
-        raise  # re-raise so APScheduler registers the failure
+        logger.exception("Erro ao enviar notificação %s (%d jogos)", ntype, len(matches))
+        raise
 
 
-def _cancel_match_jobs(match_id: str):
-    """Remove all pending scheduler jobs for a match."""
-    for ntype in ("day_before", "morning", "pre_match"):
-        job_id = _job_id(match_id, ntype)
-        if scheduler.get_job(job_id):
-            scheduler.remove_job(job_id)
-            logger.info("Cancelado [%s]", job_id)
-    _known_matches.pop(match_id, None)
-
-
-def _match_data_changed(old: dict, new: dict) -> bool:
-    return (old["kickoff_utc"] != new["kickoff_utc"]
-            or old["home"] != new["home"]
-            or old["away"] != new["away"])
-
-
-def _schedule_one(run_at: datetime, match: dict, ntype: str, func):
+def _notification_entries(match: dict) -> list[tuple]:
+    """Return (run_at, ntype, match) triples, skipping past or already-sent ones."""
     now = datetime.now(tz=TIMEZONE)
-
-    if run_at <= now:
-        logger.debug("Pulando %s para %s: horário já passou (%s)", ntype, match["id"], run_at)
-        return
-
-    if is_sent(match["id"], ntype):
-        return  # already sent in a previous run
-
-    job_id = _job_id(match["id"], ntype)
-    if scheduler.get_job(job_id):
-        return  # already queued in memory
-
-    scheduler.add_job(
-        _execute_notification,
-        trigger="date",
-        run_date=run_at,
-        id=job_id,
-        args=[func, match, ntype],
-        misfire_grace_time=_GRACE[ntype],
-    )
-    logger.info("Agendado [%s] para %s", job_id, run_at.strftime("%Y-%m-%d %H:%M %Z"))
-
-
-def _schedule_match(match: dict):
-    match_id = match["id"]
-
-    # If ESPN updated this fixture (new time, date, or teams), cancel stale
-    # jobs and reschedule with fresh data.
-    if match_id in _known_matches:
-        if not _match_data_changed(_known_matches[match_id], match):
-            return  # unchanged — nothing to do
-        old = _known_matches[match_id]
-        logger.warning(
-            "Partida %s alterada: %s %s×%s → %s %s×%s — reagendando",
-            match_id,
-            old["kickoff_utc"].isoformat(), old["home"], old["away"],
-            match["kickoff_utc"].isoformat(), match["home"], match["away"],
-        )
-        _cancel_match_jobs(match_id)
-
     kickoff_local = match["kickoff_utc"].astimezone(TIMEZONE)
     d = kickoff_local.date()
 
-    # 20:00 the day before
     day_before_at = TIMEZONE.localize(datetime(d.year, d.month, d.day, 20, 0)) - timedelta(days=1)
-
-    # 09:00 on match day
     morning_at = TIMEZONE.localize(datetime(d.year, d.month, d.day, 9, 0))
-
-    # 5 minutes before kickoff
     pre_match_at = kickoff_local - timedelta(minutes=5)
 
-    _schedule_one(day_before_at, match, "day_before", send_day_before)
-    _schedule_one(morning_at,    match, "morning",    send_morning)
-    _schedule_one(pre_match_at,  match, "pre_match",  send_pre_match)
-
-    _known_matches[match_id] = match
+    entries = []
+    for run_at, ntype in [
+        (day_before_at, "day_before"),
+        (morning_at, "morning"),
+        (pre_match_at, "pre_match"),
+    ]:
+        if run_at > now and not is_sent(match["id"], ntype):
+            entries.append((run_at, ntype, match))
+    return entries
 
 
 def fetch_and_schedule():
     logger.info("Buscando próximas partidas...")
-    all_fresh_ids: set[str] = set()
 
+    # Cancel all pending notification jobs — they are rebuilt from fresh ESPN
+    # data every cycle so that changed dates, times, or teams are picked up.
+    for job in scheduler.get_jobs():
+        if job.id != "fetch_matches":
+            scheduler.remove_job(job.id)
+
+    all_entries: list[tuple] = []
     for team in TEAMS:
         fixtures = get_upcoming_fixtures(team["search"], team["leagues"])
         logger.info("Time %s → %d partidas encontradas", team["name"], len(fixtures))
         for match in fixtures:
-            all_fresh_ids.add(match["id"])
             try:
-                _schedule_match(match)
+                all_entries.extend(_notification_entries(match))
             except Exception:
                 logger.exception("Erro ao processar partida: %s", match)
 
-    # Cancel jobs for matches ESPN no longer returns for any tracked team
-    # (e.g. event reassigned to a different matchup).
-    stale_ids = set(_known_matches.keys()) - all_fresh_ids
-    for match_id in stale_ids:
-        old = _known_matches[match_id]
-        logger.warning(
-            "Partida %s (%s×%s) não encontrada — cancelando notificações",
-            match_id, old["home"], old["away"],
+    # Group notifications that fire at the same moment into a single message.
+    groups: dict[tuple, list[dict]] = defaultdict(list)
+    seen: set[tuple[str, str]] = set()
+    for run_at, ntype, match in all_entries:
+        key = (match["id"], ntype)
+        if key not in seen:  # deduplicate (match can appear for multiple teams)
+            seen.add(key)
+            groups[(run_at, ntype)].append(match)
+
+    for (run_at, ntype), matches in groups.items():
+        job_id = f"{ntype}__{run_at.strftime('%Y%m%d_%H%M')}"
+        scheduler.add_job(
+            _execute_batch,
+            trigger="date",
+            run_date=run_at,
+            id=job_id,
+            args=[ntype, matches],
+            misfire_grace_time=_GRACE[ntype],
         )
-        _cancel_match_jobs(match_id)
+        labels = ", ".join(f"{m['home']}×{m['away']}" for m in matches)
+        logger.info("Agendado [%s] (%d jogo(s): %s) para %s",
+                     job_id, len(matches), labels,
+                     run_at.strftime("%Y-%m-%d %H:%M %Z"))
 
     logger.info("Busca concluída")
 
