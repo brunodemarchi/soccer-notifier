@@ -34,25 +34,20 @@ def _match_block(match: dict, include_time: bool = True) -> str:
     return block
 
 
+def _send_batch(matches: list[dict], singular: str, plural: str, include_time: bool = True):
+    heading = singular if len(matches) == 1 else plural
+    body = "\n\n".join(_match_block(m, include_time) for m in matches)
+    sep = "\n" if len(matches) == 1 else "\n\n"
+    _send(f"{heading}{sep}{body}")
+
+
 def send_day_before(matches: list[dict]):
-    if len(matches) == 1:
-        _send(f"🗓️ <b>Jogo amanhã!</b>\n{_match_block(matches[0])}")
-    else:
-        body = "\n\n".join(_match_block(m) for m in matches)
-        _send(f"🗓️ <b>Jogos amanhã!</b>\n\n{body}")
+    _send_batch(matches, "🗓️ <b>Jogo amanhã!</b>", "🗓️ <b>Jogos amanhã!</b>")
 
 
 def send_morning(matches: list[dict]):
-    if len(matches) == 1:
-        _send(f"☀️ <b>Tem jogo hoje!</b>\n{_match_block(matches[0])}")
-    else:
-        body = "\n\n".join(_match_block(m) for m in matches)
-        _send(f"☀️ <b>Tem jogos hoje!</b>\n\n{body}")
+    _send_batch(matches, "☀️ <b>Tem jogo hoje!</b>", "☀️ <b>Tem jogos hoje!</b>")
 
 
 def send_pre_match(matches: list[dict]):
-    if len(matches) == 1:
-        _send(f"🚨 <b>Começa em 5 minutos!</b>\n{_match_block(matches[0], include_time=False)}")
-    else:
-        body = "\n\n".join(_match_block(m, include_time=False) for m in matches)
-        _send(f"🚨 <b>Começam em 5 minutos!</b>\n\n{body}")
+    _send_batch(matches, "🚨 <b>Começa em 5 minutos!</b>", "🚨 <b>Começam em 5 minutos!</b>", include_time=False)
