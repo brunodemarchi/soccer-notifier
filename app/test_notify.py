@@ -23,7 +23,7 @@ def test():
     found_any = False
 
     for team in TEAMS:
-        fixtures = get_upcoming_fixtures(team["search"], team["leagues"])
+        fixtures = get_upcoming_fixtures(team)
         if not fixtures:
             print(f"[{team['name']}] ⚠️  Nenhum jogo encontrado")
             continue

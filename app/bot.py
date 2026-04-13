@@ -11,9 +11,9 @@ import time
 
 import requests
 
-from api import get_upcoming_fixtures
-from config import TEAMS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS, TIMEZONE
-from notifier import _send_to
+from api import get_upcoming_fixtures, merge_fixtures
+from config import TEAMS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS
+from notifier import _send_to, send_proximos
 
 logger = logging.getLogger(__name__)
 
@@ -43,25 +43,21 @@ def _reply(chat_id: str | int, text: str):
 
 
 def _handle_proximos(chat_id: str | int):
-    found_any = False
+    next_per_team = []
     for team in TEAMS:
-        fixtures = get_upcoming_fixtures(team["search"], team["leagues"])
-        if not fixtures:
-            continue
+        fixtures = get_upcoming_fixtures(team)
+        if fixtures:
+            next_per_team.append(fixtures[0])
 
-        match = fixtures[0]
-        kickoff_local = match["kickoff_utc"].astimezone(TIMEZONE)
-        _reply(
-            chat_id,
-            f"📅 <b>Próximo jogo — {team['name']}</b>\n"
-            f"⚽ {match['home']} x {match['away']}\n"
-            f"🏆 {match['league']}\n"
-            f"🕐 {kickoff_local.strftime('%d/%m/%Y %H:%M')} (Brasília)",
-        )
-        found_any = True
-
-    if not found_any:
+    if not next_per_team:
         _reply(chat_id, "❌ Nenhum jogo encontrado para nenhum time.")
+        return
+
+    matches = merge_fixtures(next_per_team)
+    try:
+        send_proximos(matches, sender=lambda text: _send_to(chat_id, text))
+    except Exception:
+        logger.exception("Erro ao responder chat %s", chat_id)
 
 
 def _is_authorized(chat_id: str | int) -> bool:

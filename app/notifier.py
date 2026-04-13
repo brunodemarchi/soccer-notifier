@@ -23,22 +23,33 @@ def _send(text: str):
     logger.info("Notificação enviada (%d destinatários): %s", len(TELEGRAM_CHAT_IDS), text[:80])
 
 
-def _local_time(match: dict) -> str:
-    return match["kickoff_utc"].astimezone(TIMEZONE).strftime("%H:%M")
+def _local_kickoff(match: dict, fmt: str) -> str:
+    return match["kickoff_utc"].astimezone(TIMEZONE).strftime(fmt)
 
 
-def _match_block(match: dict, include_time: bool = True) -> str:
-    block = f"⚽ {match['home']} x {match['away']}\n🏆 {match['league']}"
-    if include_time:
-        block += f"\n🕐 {_local_time(match)} (Brasília)"
-    return block
+def _match_block(match: dict, time_fmt: str | None = "%H:%M") -> str:
+    teams = " / ".join(match.get("teams", []))
+    lines = []
+    if teams:
+        lines.append(f"<b>{teams}</b>")
+    lines.append(f"⚽ {match['home']} x {match['away']}")
+    lines.append(f"🏆 {match['league']}")
+    if time_fmt:
+        lines.append(f"🕐 {_local_kickoff(match, time_fmt)} (Brasília)")
+    return "\n".join(lines)
 
 
-def _send_batch(matches: list[dict], singular: str, plural: str, include_time: bool = True):
+def _send_batch(
+    matches: list[dict],
+    singular: str,
+    plural: str,
+    time_fmt: str | None = "%H:%M",
+    sender=_send,
+):
     heading = singular if len(matches) == 1 else plural
-    body = "\n\n".join(_match_block(m, include_time) for m in matches)
+    body = "\n\n".join(_match_block(m, time_fmt) for m in matches)
     sep = "\n" if len(matches) == 1 else "\n\n"
-    _send(f"{heading}{sep}{body}")
+    sender(f"{heading}{sep}{body}")
 
 
 def send_day_before(matches: list[dict]):
@@ -50,4 +61,14 @@ def send_morning(matches: list[dict]):
 
 
 def send_pre_match(matches: list[dict]):
-    _send_batch(matches, "🚨 <b>Começa em 5 minutos!</b>", "🚨 <b>Começam em 5 minutos!</b>", include_time=False)
+    _send_batch(matches, "🚨 <b>Começa em 5 minutos!</b>", "🚨 <b>Começam em 5 minutos!</b>", time_fmt=None)
+
+
+def send_proximos(matches: list[dict], sender=_send):
+    _send_batch(
+        matches,
+        "📅 <b>Próximo jogo</b>",
+        "📅 <b>Próximos jogos</b>",
+        time_fmt="%d/%m/%Y %H:%M",
+        sender=sender,
+    )

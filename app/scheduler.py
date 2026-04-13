@@ -6,7 +6,7 @@ import pytz
 from apscheduler.events import EVENT_JOB_ERROR
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from api import get_upcoming_fixtures
+from api import get_upcoming_fixtures, merge_fixtures
 from config import TEAMS, TIMEZONE
 from db import is_sent, mark_sent
 from notifier import send_day_before, send_morning, send_pre_match
@@ -71,24 +71,24 @@ def fetch_and_schedule():
         if job.id != "fetch_matches":
             scheduler.remove_job(job.id)
 
-    all_entries: list[tuple] = []
+    raw_fixtures: list[dict] = []
     for team in TEAMS:
-        fixtures = get_upcoming_fixtures(team["search"], team["leagues"])
+        fixtures = get_upcoming_fixtures(team)
         logger.info("Time %s → %d partidas encontradas", team["name"], len(fixtures))
-        for match in fixtures:
-            try:
-                all_entries.extend(_notification_entries(match))
-            except Exception:
-                logger.exception("Erro ao processar partida: %s", match)
+        raw_fixtures.extend(fixtures)
+
+    # Collapse cross-team duplicates (e.g. clássico Barça x Real) into one
+    # fixture whose `teams` list names every configured team that cares.
+    merged = merge_fixtures(raw_fixtures)
 
     # Group notifications that fire at the same moment into a single message.
     groups: dict[tuple, list[dict]] = defaultdict(list)
-    seen: set[tuple[str, str]] = set()
-    for run_at, ntype, match in all_entries:
-        key = (match["id"], ntype)
-        if key not in seen:  # deduplicate (match can appear for multiple teams)
-            seen.add(key)
-            groups[(run_at, ntype)].append(match)
+    for match in merged:
+        try:
+            for run_at, ntype, m in _notification_entries(match):
+                groups[(run_at, ntype)].append(m)
+        except Exception:
+            logger.exception("Erro ao processar partida: %s", match)
 
     for (run_at, ntype), matches in groups.items():
         job_id = f"{ntype}__{run_at.strftime('%Y%m%d_%H%M')}"
